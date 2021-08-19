@@ -14,6 +14,7 @@
 ARG BASEIMAGE=gcr.io/distroless/static:latest-amd64
 FROM $BASEIMAGE
 LABEL maintainer="Marcin Wielgus <mwielgus@google.com>"
+LABEL org.opencontainers.image.source = "https://github.com/marvinpinto/autoscaler"
 
 COPY cluster-autoscaler-amd64 /cluster-autoscaler
 CMD ["/cluster-autoscaler"]

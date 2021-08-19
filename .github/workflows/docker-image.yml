@@ -1,0 +1,78 @@
+---
+name: "Docker Image"
+
+on:
+  push:
+    branches:
+      - "hetzner-docker-image-testing"
+    tags-ignore:
+      - "*"
+
+jobs:
+  gh_latest:
+    runs-on: "ubuntu-latest"
+    env:
+      GOPATH: ${{ github.workspace }}/go
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16
+
+      - uses: actions/checkout@v2
+        with:
+          path: ${{ env.GOPATH }}/src/k8s.io/autoscaler
+
+      - name: Apt-get
+        run: sudo apt-get install libseccomp-dev -qq
+
+      - name: Prepare
+        working-directory: ${{ env.GOPATH }}/src/k8s.io/autoscaler
+        run: hack/install-verify-tools.sh
+        env:
+          GO111MODULE: auto
+
+      - name: Verify
+        working-directory: ${{ env.GOPATH }}/src/k8s.io/autoscaler
+        run: hack/verify-all.sh -v
+        env:
+          GO111MODULE: auto
+
+      - name: Test
+        working-directory: ${{ env.GOPATH }}/src/k8s.io/autoscaler
+        run: hack/for-go-proj.sh test
+        env:
+          GO111MODULE: auto
+
+      - name: "Retrieve the short SHA"
+        id: "sha"
+        run: echo "::set-output name=value::$(echo ${GITHUB_SHA::8})"
+
+      - name: "Build autoscaler"
+        run: |
+          cd ${{ env.GOPATH }}/src/k8s.io/autoscaler/cluster-autoscaler
+          make build
+
+      - name: "Set up QEMU"
+        uses: "docker/setup-qemu-action@v1"
+
+      - name: "Set up Docker Buildx"
+        uses: "docker/setup-buildx-action@v1"
+
+      - name: "Login to GitHub Container Registry"
+        uses: "docker/login-action@v1"
+        with:
+          registry: "ghcr.io"
+          username: "${{ github.actor }}"
+          password: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: "Publish to GitHub Packages"
+        uses: "docker/build-push-action@v2"
+        with:
+          context: "${{ env.GOPATH }}/src/k8s.io/autoscaler/cluster-autoscaler"
+          file: "${{ env.GOPATH }}/src/k8s.io/autoscaler/cluster-autoscaler/Dockerfile.amd64"
+          platforms: "linux/amd64"
+          push: true
+          tags: |
+            ghcr.io/marvinpinto/autoscaler:latest
+            ghcr.io/marvinpinto/autoscaler:${{ steps.sha.outputs.value }}
